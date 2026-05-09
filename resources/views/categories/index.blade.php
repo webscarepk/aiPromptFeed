@@ -52,13 +52,25 @@
                 <tr class="transition hover:bg-white/[0.02]" style="border-bottom: 1px solid rgba(255,255,255,0.04);">
                     <td class="px-6 py-4 text-gray-600 text-sm">{{ $categories->firstItem() + $loop->index }}</td>
                     <td class="px-6 py-4">
-                        @if($category->image)
-                            <img src="{{ asset('storage/' . $category->image) }}" class="w-10 h-10 rounded-xl object-cover" style="border: 1px solid rgba(255,255,255,0.08);">
-                        @else
-                            <div class="w-10 h-10 rounded-xl flex items-center justify-center text-gray-600" style="background: rgba(255,255,255,0.04);">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                            </div>
-                        @endif
+                        <div class="flex flex-col gap-2">
+                            @if($category->image)
+                                <div class="relative group">
+                                    <img src="{{ asset('storage/' . $category->image) }}" class="w-10 h-10 rounded-xl object-cover" style="border: 1px solid rgba(255,255,255,0.08);" title="Original">
+                                    <span class="absolute -top-1 -right-1 bg-blue-500 text-[8px] text-white px-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">ORG</span>
+                                </div>
+                            @endif
+                            @if($category->compressed_image)
+                                <div class="relative group">
+                                    <img src="{{ asset('storage/' . $category->compressed_image) }}" class="w-10 h-10 rounded-xl object-cover" style="border: 1px solid rgba(255,255,255,0.08);" title="Compressed">
+                                    <span class="absolute -top-1 -right-1 bg-green-500 text-[8px] text-white px-1 rounded-full">CMP</span>
+                                </div>
+                            @endif
+                            @if(!$category->image && !$category->compressed_image)
+                                <div class="w-10 h-10 rounded-xl flex items-center justify-center text-gray-600" style="background: rgba(255,255,255,0.04);">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                                </div>
+                            @endif
+                        </div>
                     </td>
                     <td class="px-6 py-4">
                         <p class="font-semibold text-white">{{ $category->name }}</p>
@@ -74,7 +86,7 @@
                     </td>
                     <td class="px-6 py-4">
                         <div class="flex items-center justify-end gap-3">
-                            <button @click="openEdit({{ $category->id }}, {{ json_encode($category->name) }}, {{ json_encode($category->description ?? '') }}, {{ json_encode($category->image ? asset('storage/'.$category->image) : '') }})"
+                            <button @click="openEdit({{ $category->id }}, {{ json_encode($category->name) }}, {{ json_encode($category->description ?? '') }}, {{ json_encode($category->image ? asset('storage/'.$category->image) : '') }}, {{ json_encode($category->compressed_image ? asset('storage/'.$category->compressed_image) : '') }})"
                                     title="Edit"
                                     class="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition duration-200">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
@@ -156,8 +168,19 @@
                 <div>
                     <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Image <span class="text-gray-600 font-normal normal-case">(optional)</span></label>
                     <div class="flex items-center gap-4">
-                        <div x-show="form.currentImage || previewUrl" class="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0" style="border: 1px solid rgba(255,255,255,0.1);">
-                            <img :src="previewUrl || form.currentImage" class="w-full h-full object-cover">
+                        <div x-show="form.currentImage || previewUrl" class="flex gap-2">
+                            <div class="relative group">
+                                <div class="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0" style="border: 1px solid rgba(255,255,255,0.1);">
+                                    <img :src="previewUrl || form.currentImage" class="w-full h-full object-cover">
+                                </div>
+                                <span x-show="!previewUrl && form.currentImage" class="absolute -top-1 -right-1 bg-blue-500 text-[8px] text-white px-1 rounded-full">ORG</span>
+                            </div>
+                            <div x-show="!previewUrl && form.currentCompressedImage" class="relative group">
+                                <div class="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0" style="border: 1px solid rgba(255,255,255,0.1);">
+                                    <img :src="form.currentCompressedImage" class="w-full h-full object-cover">
+                                </div>
+                                <span class="absolute -top-1 -right-1 bg-green-500 text-[8px] text-white px-1 rounded-full">CMP</span>
+                            </div>
                         </div>
                         <label class="flex-grow flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition"
                                style="background: rgba(255,255,255,0.03); border: 2px dashed rgba(255,255,255,0.1);"
@@ -185,9 +208,9 @@
 function categoryModal() {
     return {
         open: false, isEdit: false, editId: null, previewUrl: '',
-        form: { name: '', description: '', currentImage: '' },
-        openCreate() { this.isEdit=false; this.editId=null; this.previewUrl=''; this.form={name:'',description:'',currentImage:''}; this.open=true; document.body.style.overflow='hidden'; },
-        openEdit(id,name,description,currentImage) { this.isEdit=true; this.editId=id; this.previewUrl=''; this.form={name,description,currentImage}; this.open=true; document.body.style.overflow='hidden'; },
+        form: { name: '', description: '', currentImage: '', currentCompressedImage: '' },
+        openCreate() { this.isEdit=false; this.editId=null; this.previewUrl=''; this.form={name:'',description:'',currentImage:'', currentCompressedImage:''}; this.open=true; document.body.style.overflow='hidden'; },
+        openEdit(id,name,description,currentImage, currentCompressedImage) { this.isEdit=true; this.editId=id; this.previewUrl=''; this.form={name,description,currentImage, currentCompressedImage}; this.open=true; document.body.style.overflow='hidden'; },
         closeModal() { this.open=false; this.previewUrl=''; document.body.style.overflow=''; },
         onImageChange(e) { const f=e.target.files[0]; if(f) this.previewUrl=URL.createObjectURL(f); }
     }

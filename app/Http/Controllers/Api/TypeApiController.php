@@ -17,6 +17,7 @@ class TypeApiController extends Controller
                     'name' => $type->name,
                     'slug' => $type->slug,
                     'image' => $type->image ? asset('storage/' . $type->image) : null,
+                    'compressed_image' => $type->compressed_image ? asset('storage/' . $type->compressed_image) : null,
                     'description' => $type->description,
                 ];
             });
@@ -37,6 +38,7 @@ class TypeApiController extends Controller
                     'name' => $type->name,
                     'slug' => $type->slug,
                     'image' => $type->image ? asset('storage/' . $type->image) : null,
+                    'compressed_image' => $type->compressed_image ? asset('storage/' . $type->compressed_image) : null,
                     'description' => $type->description,
                 ]
             ], 200);

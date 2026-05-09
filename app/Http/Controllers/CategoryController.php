@@ -7,8 +7,16 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
 
+use App\Services\ImageService;
+
 class CategoryController extends Controller
 {
+    protected $imageService;
+
+    public function __construct(ImageService $imageService)
+    {
+        $this->imageService = $imageService;
+    }
     public function index(Request $request)
     {
         $query = Category::query();
@@ -23,9 +31,18 @@ class CategoryController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate(['name' => 'required|string|max:255', 'description' => 'nullable|string', 'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048']);
+        $request->validate([
+            'name' => 'required|string|max:255|unique:categories,name',
+            'description' => 'nullable|string',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048'
+        ]);
+
         $data = ['name' => $request->name, 'slug' => Str::slug($request->name), 'description' => $request->description];
-        if ($request->hasFile('image')) $data['image'] = $request->file('image')->store('categories', 'public');
+        if ($request->hasFile('image')) {
+            $paths = $this->imageService->compressAndStore($request->file('image'), 'categories');
+            $data['image'] = $paths['original'];
+            $data['compressed_image'] = $paths['compressed'];
+        }
         Category::create($data);
         return redirect()->route('categories.index')->with('success', 'Category created successfully.');
     }
@@ -34,11 +51,18 @@ class CategoryController extends Controller
 
     public function update(Request $request, Category $category)
     {
-        $request->validate(['name' => 'required|string|max:255', 'description' => 'nullable|string', 'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048']);
+        $request->validate([
+            'name' => 'required|string|max:255|unique:categories,name,' . $category->id,
+            'description' => 'nullable|string',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048'
+        ]);
+
         $data = ['name' => $request->name, 'slug' => Str::slug($request->name), 'description' => $request->description];
         if ($request->hasFile('image')) {
-            if ($category->image) Storage::disk('public')->delete($category->image);
-            $data['image'] = $request->file('image')->store('categories', 'public');
+            $this->imageService->deleteImages($category->image, $category->compressed_image);
+            $paths = $this->imageService->compressAndStore($request->file('image'), 'categories');
+            $data['image'] = $paths['original'];
+            $data['compressed_image'] = $paths['compressed'];
         }
         $category->update($data);
         return redirect()->route('categories.index')->with('success', 'Category updated successfully.');
@@ -46,7 +70,7 @@ class CategoryController extends Controller
 
     public function destroy(Category $category)
     {
-        if ($category->image) Storage::disk('public')->delete($category->image);
+        $this->imageService->deleteImages($category->image, $category->compressed_image);
         $category->delete();
         return redirect()->route('categories.index')->with('success', 'Category deleted.');
     }

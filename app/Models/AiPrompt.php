@@ -12,7 +12,8 @@ class AiPrompt extends Model
         'image',
         'prompt',
         'slug',
-        'description'
+        'description',
+        'compressed_image'
     ];
 
     public function category()

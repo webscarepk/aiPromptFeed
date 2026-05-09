@@ -62,7 +62,11 @@
         <div class="card overflow-hidden flex flex-col group hover:border-blue-500/30 transition duration-300">
             {{-- Image --}}
             <div class="aspect-video bg-gray-900/60 relative overflow-hidden">
-                @if($prompt->image)
+                @if($prompt->compressed_image)
+                    <img src="{{ asset('storage/' . $prompt->compressed_image) }}" alt=""
+                         class="w-full h-full object-cover transition duration-500 group-hover:scale-105 opacity-90">
+                    <span class="absolute top-2 right-2 bg-green-500/80 text-[10px] text-white px-1.5 py-0.5 rounded-md backdrop-blur-sm">CMP</span>
+                @elseif($prompt->image)
                     <img src="{{ asset('storage/' . $prompt->image) }}" alt=""
                          class="w-full h-full object-cover transition duration-500 group-hover:scale-105 opacity-90">
                 @else

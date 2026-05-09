@@ -7,8 +7,16 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
 
+use App\Services\ImageService;
+
 class TypeController extends Controller
 {
+    protected $imageService;
+
+    public function __construct(ImageService $imageService)
+    {
+        $this->imageService = $imageService;
+    }
     public function index(Request $request)
     {
         $query = Type::query();
@@ -23,9 +31,18 @@ class TypeController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate(['name' => 'required|string|max:255', 'description' => 'nullable|string', 'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048']);
+        $request->validate([
+            'name' => 'required|string|max:255|unique:types,name',
+            'description' => 'nullable|string',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048'
+        ]);
+
         $data = ['name' => $request->name, 'slug' => Str::slug($request->name), 'description' => $request->description];
-        if ($request->hasFile('image')) $data['image'] = $request->file('image')->store('types', 'public');
+        if ($request->hasFile('image')) {
+            $paths = $this->imageService->compressAndStore($request->file('image'), 'types');
+            $data['image'] = $paths['original'];
+            $data['compressed_image'] = $paths['compressed'];
+        }
         Type::create($data);
         return redirect()->route('types.index')->with('success', 'Type created successfully.');
     }
@@ -34,11 +51,18 @@ class TypeController extends Controller
 
     public function update(Request $request, Type $type)
     {
-        $request->validate(['name' => 'required|string|max:255', 'description' => 'nullable|string', 'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048']);
+        $request->validate([
+            'name' => 'required|string|max:255|unique:types,name,' . $type->id,
+            'description' => 'nullable|string',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048'
+        ]);
+
         $data = ['name' => $request->name, 'slug' => Str::slug($request->name), 'description' => $request->description];
         if ($request->hasFile('image')) {
-            if ($type->image) Storage::disk('public')->delete($type->image);
-            $data['image'] = $request->file('image')->store('types', 'public');
+            $this->imageService->deleteImages($type->image, $type->compressed_image);
+            $paths = $this->imageService->compressAndStore($request->file('image'), 'types');
+            $data['image'] = $paths['original'];
+            $data['compressed_image'] = $paths['compressed'];
         }
         $type->update($data);
         return redirect()->route('types.index')->with('success', 'Type updated successfully.');
@@ -46,7 +70,7 @@ class TypeController extends Controller
 
     public function destroy(Type $type)
     {
-        if ($type->image) Storage::disk('public')->delete($type->image);
+        $this->imageService->deleteImages($type->image, $type->compressed_image);
         $type->delete();
         return redirect()->route('types.index')->with('success', 'Type deleted.');
     }

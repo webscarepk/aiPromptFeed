@@ -25,7 +25,8 @@ class User extends Authenticatable implements MustVerifyEmail
         'password',
         'full_name',
         'avatar_url',
-        'subscription_id'
+        'subscription_id',
+        'email_verified_at'
     ];
 
     public function subscriptionPlan()

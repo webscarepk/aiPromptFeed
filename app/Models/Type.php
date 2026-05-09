@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Type extends Model
 {
-    protected $fillable = ['name', 'slug', 'description', 'image'];
+    protected $fillable = ['name', 'slug', 'description', 'image', 'compressed_image'];
 
     public function aiPrompts()
     {

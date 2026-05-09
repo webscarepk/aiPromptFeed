@@ -18,6 +18,7 @@ class CategoryApiController extends Controller
                     'name' => $category->name,
                     'slug' => $category->slug,
                     'image' => $category->image ? asset('storage/' . $category->image) : null,
+                    'compressed_image' => $category->compressed_image ? asset('storage/' . $category->compressed_image) : null,
                     'description' => $category->description,
                 ];
             });
@@ -38,6 +39,7 @@ class CategoryApiController extends Controller
                     'name' => $category->name,
                     'slug' => $category->slug,
                     'image' => $category->image ? asset('storage/' . $category->image) : null,
+                    'compressed_image' => $category->compressed_image ? asset('storage/' . $category->compressed_image) : null,
                     'description' => $category->description,
                 ]
             ], 200);

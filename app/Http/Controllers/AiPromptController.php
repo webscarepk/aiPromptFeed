@@ -9,8 +9,16 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
 
+use App\Services\ImageService;
+
 class AiPromptController extends Controller
 {
+    protected $imageService;
+
+    public function __construct(ImageService $imageService)
+    {
+        $this->imageService = $imageService;
+    }
     public function index(Request $request)
     {
         $query = AiPrompt::with(['category', 'type'])->latest();
@@ -49,7 +57,9 @@ class AiPromptController extends Controller
         $data['slug'] = Str::slug(Str::limit($request->prompt, 50)) . '-' . rand(1000, 9999);
 
         if ($request->hasFile('image')) {
-            $data['image'] = $request->file('image')->store('prompts', 'public');
+            $paths = $this->imageService->compressAndStore($request->file('image'), 'prompts');
+            $data['image'] = $paths['original'];
+            $data['compressed_image'] = $paths['compressed'];
         }
 
         AiPrompt::create($data);
@@ -74,8 +84,10 @@ class AiPromptController extends Controller
             $data['slug'] = Str::slug(Str::limit($request->prompt, 50)) . '-' . rand(1000, 9999);
         }
         if ($request->hasFile('image')) {
-            if ($aiPrompt->image) Storage::disk('public')->delete($aiPrompt->image);
-            $data['image'] = $request->file('image')->store('prompts', 'public');
+            $this->imageService->deleteImages($aiPrompt->image, $aiPrompt->compressed_image);
+            $paths = $this->imageService->compressAndStore($request->file('image'), 'prompts');
+            $data['image'] = $paths['original'];
+            $data['compressed_image'] = $paths['compressed'];
         }
 
         $aiPrompt->update($data);
@@ -84,7 +96,7 @@ class AiPromptController extends Controller
 
     public function destroy(AiPrompt $aiPrompt)
     {
-        if ($aiPrompt->image) Storage::disk('public')->delete($aiPrompt->image);
+        $this->imageService->deleteImages($aiPrompt->image, $aiPrompt->compressed_image);
         $aiPrompt->delete();
         return redirect()->route('ai-prompts.index')->with('success', 'AI Prompt deleted.');
     }

@@ -64,7 +64,11 @@
             @forelse($aiPrompts as $prompt)
                 <div class="card overflow-hidden flex flex-col group hover:border-blue-500/30 transition duration-300">
                     <div class="aspect-video bg-gray-900/60 relative overflow-hidden">
-                        @if($prompt->image)
+                        @if($prompt->compressed_image)
+                            <img src="{{ asset('storage/' . $prompt->compressed_image) }}" alt=""
+                                class="w-full h-full object-cover transition duration-500 group-hover:scale-105">
+                            <span class="absolute top-2 right-2 bg-green-500/80 text-[10px] text-white px-1.5 py-0.5 rounded-md backdrop-blur-sm">CMP</span>
+                        @elseif($prompt->image)
                             <img src="{{ asset('storage/' . $prompt->image) }}" alt=""
                                 class="w-full h-full object-cover transition duration-500 group-hover:scale-105">
                         @else
@@ -105,7 +109,7 @@
                         <span class="text-xs text-gray-600">{{ $prompt->created_at->diffForHumans() }}</span>
                         <div class="flex items-center gap-2">
                             <button
-                                @click="openEdit({{ $prompt->id }}, {{ $prompt->category_id }}, {{ $prompt->type_id }}, {{ json_encode($prompt->prompt) }}, {{ json_encode($prompt->description ?? '') }}, {{ json_encode($prompt->image ? asset('storage/' . $prompt->image) : '') }})"
+                                @click="openEdit({{ $prompt->id }}, {{ $prompt->category_id }}, {{ $prompt->type_id }}, {{ json_encode($prompt->prompt) }}, {{ json_encode($prompt->description ?? '') }}, {{ json_encode($prompt->image ? asset('storage/' . $prompt->image) : '') }}, {{ json_encode($prompt->compressed_image ? asset('storage/' . $prompt->compressed_image) : '') }})"
                                 title="Edit"
                                 class="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition duration-200">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -261,9 +265,21 @@
                             <span class="text-gray-600 font-normal normal-case">(optional)</span></label>
                         <div class="flex items-center gap-4">
                             <div x-show="previewUrl || (isEdit && form.currentImage)"
-                                class="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0"
-                                style="border: 1px solid rgba(255,255,255,0.1);">
-                                <img :src="previewUrl || form.currentImage" class="w-full h-full object-cover">
+                                class="flex gap-2">
+                                <div class="relative group">
+                                    <div class="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0"
+                                        style="border: 1px solid rgba(255,255,255,0.1);">
+                                        <img :src="previewUrl || form.currentImage" class="w-full h-full object-cover">
+                                    </div>
+                                    <span x-show="!previewUrl && form.currentImage" class="absolute -top-1 -right-1 bg-blue-500 text-[8px] text-white px-1 rounded-full">ORG</span>
+                                </div>
+                                <div x-show="!previewUrl && form.currentCompressedImage" class="relative group">
+                                    <div class="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0"
+                                        style="border: 1px solid rgba(255,255,255,0.1);">
+                                        <img :src="form.currentCompressedImage" class="w-full h-full object-cover">
+                                    </div>
+                                    <span class="absolute -top-1 -right-1 bg-green-500 text-[8px] text-white px-1 rounded-full">CMP</span>
+                                </div>
                             </div>
                             <label class="flex-grow flex items-center gap-3 px-4 py-4 rounded-xl cursor-pointer transition"
                                 style="background: rgba(255,255,255,0.03); border: 2px dashed rgba(255,255,255,0.1);"
@@ -308,16 +324,16 @@
         function promptModal() {
             return {
                 open: false, isEdit: false, editId: null, previewUrl: '',
-                form: { category_id: '', type_id: '', prompt: '', description: '', currentImage: '' },
+                form: { category_id: '', type_id: '', prompt: '', description: '', currentImage: '', currentCompressedImage: '' },
 
                 openCreate() {
                     this.isEdit = false; this.editId = null; this.previewUrl = '';
-                    this.form = { category_id: '', type_id: '', prompt: '', description: '', currentImage: '' };
+                    this.form = { category_id: '', type_id: '', prompt: '', description: '', currentImage: '', currentCompressedImage: '' };
                     this.open = true; document.body.style.overflow = 'hidden';
                 },
-                openEdit(id, category_id, type_id, prompt, description, currentImage) {
+                openEdit(id, category_id, type_id, prompt, description, currentImage, currentCompressedImage) {
                     this.isEdit = true; this.editId = id; this.previewUrl = '';
-                    this.form = { category_id, type_id, prompt, description, currentImage };
+                    this.form = { category_id, type_id, prompt, description, currentImage, currentCompressedImage };
                     this.open = true; document.body.style.overflow = 'hidden';
                 },
                 closeModal() { this.open = false; this.previewUrl = ''; document.body.style.overflow = ''; },
