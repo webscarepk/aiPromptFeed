@@ -1,0 +1,84 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\AiPrompt;
+use Illuminate\Http\Request;
+
+class AiPromptApiController extends Controller
+{
+    public function index(Request $request)
+    {
+        try {
+            $query = AiPrompt::with(['category', 'type']);
+
+            if ($request->filled('category_id')) {
+                $query->where('category_id', $request->category_id);
+            }
+
+            if ($request->filled('type_id')) {
+                $query->where('type_id', $request->type_id);
+            }
+
+            if ($request->filled('search')) {
+                $query->where('prompt', 'like', '%' . $request->search . '%');
+            }
+
+            $prompts = $query->latest()->paginate(20);
+
+            $prompts->getCollection()->transform(function ($prompt) {
+                return [
+                    'id' => $prompt->id,
+                    'prompt' => $prompt->prompt,
+                    'description' => $prompt->description,
+                    'image' => $prompt->image,
+                    'category' => $prompt->category ? [
+                        'id' => $prompt->category->id,
+                        'name' => $prompt->category->name,
+                        'slug' => $prompt->category->slug,
+                    ] : null,
+                    'type' => $prompt->type ? [
+                        'id' => $prompt->type->id,
+                        'name' => $prompt->type->name,
+                        'slug' => $prompt->type->slug,
+                    ] : null,
+                    'created_at' => $prompt->created_at->diffForHumans(),
+                ];
+            });
+
+            return response()->json(['success' => true, 'data' => $prompts], 200);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Failed to fetch AI prompts'], 500);
+        }
+    }
+
+    public function show($id)
+    {
+        try {
+            $prompt = AiPrompt::with(['category', 'type'])->findOrFail($id);
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'id' => $prompt->id,
+                    'prompt' => $prompt->prompt,
+                    'description' => $prompt->description,
+                    'image' => $prompt->image,
+                    'category' => $prompt->category ? [
+                        'id' => $prompt->category->id,
+                        'name' => $prompt->category->name,
+                        'slug' => $prompt->category->slug,
+                    ] : null,
+                    'type' => $prompt->type ? [
+                        'id' => $prompt->type->id,
+                        'name' => $prompt->type->name,
+                        'slug' => $prompt->type->slug,
+                    ] : null,
+                    'created_at' => $prompt->created_at->toDateTimeString(),
+                ]
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'AI Prompt not found'], 404);
+        }
+    }
+}
