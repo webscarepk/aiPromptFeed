@@ -178,11 +178,12 @@
             </div>
         @endif
 
-        {{-- ======== MODAL ======== --}}
+        {{-- ======== MAIN PROMPT MODAL ======== --}}
         <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0"
             x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150"
             x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
-            class="fixed inset-0 z-50 flex items-center justify-center p-4" style="display:none;">
+            class="fixed inset-0 z-40 flex items-center justify-center p-4" 
+            style="display:none;">
 
             <div class="absolute inset-0 bg-black/75 backdrop-blur-sm" @click="closeModal()"></div>
 
@@ -193,6 +194,7 @@
                 x-transition:leave-start="opacity-100 scale-100 translate-y-0"
                 x-transition:leave-end="opacity-0 scale-95 translate-y-4"
                 class="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto z-10 rounded-2xl"
+                @click.stop
                 style="background: #0d1117; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 25px 80px rgba(0,0,0,0.8);">
 
                 <div class="flex items-center justify-between p-6 sticky top-0 z-10"
@@ -221,26 +223,40 @@
                         <div>
                             <label
                                 class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Category</label>
-                            <select name="category_id" class="select-filter w-full px-4 py-2.5 text-sm rounded-xl" required>
-                                <option value="">Select…</option>
-                                @foreach($categories as $cat)
-                                    <option value="{{ $cat->id }}" :selected="form.category_id == {{ $cat->id }}">
-                                        {{ $cat->name }}
-                                    </option>
-                                @endforeach
-                            </select>
+                            <div class="flex items-center space-x-2">
+                                <select name="category_id" x-model="form.category_id" class="select-filter flex-1 px-4 py-2.5 text-sm rounded-xl" required>
+                                    <option value="">Select…</option>
+                                    @foreach($categories as $cat)
+                                        <option value="{{ $cat->id }}">{{ $cat->name }}</option>
+                                    @endforeach
+                                </select>
+                                <button type="button" @click.stop="openCatModal = true"
+                                    class="flex-shrink-0 p-2.5 bg-gray-700 hover:bg-gray-600 text-white rounded-xl transition border border-gray-600 flex items-center justify-center"
+                                    title="Add Category">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
                         <div>
                             <label
                                 class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Type</label>
-                            <select name="type_id" class="select-filter w-full px-4 py-2.5 text-sm rounded-xl" required>
-                                <option value="">Select…</option>
-                                @foreach($types as $type)
-                                    <option value="{{ $type->id }}" :selected="form.type_id == {{ $type->id }}">
-                                        {{ $type->name }}
-                                    </option>
-                                @endforeach
-                            </select>
+                            <div class="flex items-center space-x-2">
+                                <select name="type_id" x-model="form.type_id" class="select-filter flex-1 px-4 py-2.5 text-sm rounded-xl" required>
+                                    <option value="">Select…</option>
+                                    @foreach($types as $type)
+                                        <option value="{{ $type->id }}">{{ $type->name }}</option>
+                                    @endforeach
+                                </select>
+                                <button type="button" @click.stop="openTypeModal = true"
+                                    class="flex-shrink-0 p-2.5 bg-gray-700 hover:bg-gray-600 text-white rounded-xl transition border border-gray-600 flex items-center justify-center"
+                                    title="Add Type">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -318,27 +334,156 @@
                 </form>
             </div>
         </div>
+
+        {{-- ======== RAW CATEGORY MODAL (NO COMPONENT) ======== --}}
+        <div x-show="openCatModal" 
+            class="fixed inset-0 z-[100] flex items-center justify-center p-4" 
+            style="display:none;"
+            x-transition:enter="transition ease-out duration-300"
+            x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"
+            x-transition:leave="transition ease-in duration-200"
+            x-transition:leave-start="opacity-100"
+            x-transition:leave-end="opacity-0">
+            
+            <div class="absolute inset-0 bg-black/60 backdrop-blur-md" @click="openCatModal = false"></div>
+            
+            <div class="relative bg-gray-800 p-8 rounded-2xl w-full max-w-md shadow-2xl border border-gray-700" 
+                @click.stop
+                x-transition:enter="transition ease-out duration-300"
+                x-transition:enter-start="opacity-0 scale-95 translate-y-4"
+                x-transition:enter-end="opacity-100 scale-100 translate-y-0">
+                
+                <h2 class="text-xl font-bold mb-6 text-blue-400">Add New Category</h2>
+                
+                <div class="space-y-5" x-data="{ name: '', desc: '', loading: false }">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-2">Category Name</label>
+                        <input type="text" x-model="name" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 transition">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-2">Description</label>
+                        <textarea x-model="desc" rows="3" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 transition"></textarea>
+                    </div>
+                    
+                    <div class="flex justify-end gap-3 mt-8">
+                        <button type="button" @click="openCatModal = false" class="px-6 py-2.5 text-sm font-medium text-gray-400 hover:text-white transition">Cancel</button>
+                        <button type="button" 
+                            @click="
+                                if(!name) return;
+                                loading = true;
+                                fetch('{{ route('categories.store') }}', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
+                                    body: JSON.stringify({ name: name, description: desc })
+                                })
+                                .then(res => res.json())
+                                .then(data => {
+                                    if(data.success) {
+                                        document.querySelectorAll('select[name=\'category_id\']').forEach(s => s.add(new Option(data.data.name, data.data.id, true, true)));
+                                        form.category_id = data.data.id;
+                                        openCatModal = false;
+                                    } else { alert(data.message); }
+                                })
+                                .finally(() => loading = false)
+                            "
+                            :disabled="loading"
+                            class="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition disabled:opacity-50">
+                            <span x-show="!loading">Create</span>
+                            <span x-show="loading">...</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {{-- ======== RAW TYPE MODAL (NO COMPONENT) ======== --}}
+        <div x-show="openTypeModal" 
+            class="fixed inset-0 z-[100] flex items-center justify-center p-4" 
+            style="display:none;"
+            x-transition:enter="transition ease-out duration-300"
+            x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"
+            x-transition:leave="transition ease-in duration-200"
+            x-transition:leave-start="opacity-100"
+            x-transition:leave-end="opacity-0">
+            
+            <div class="absolute inset-0 bg-black/60 backdrop-blur-md" @click="openTypeModal = false"></div>
+            
+            <div class="relative bg-gray-800 p-8 rounded-2xl w-full max-w-md shadow-2xl border border-gray-700" 
+                @click.stop
+                x-transition:enter="transition ease-out duration-300"
+                x-transition:enter-start="opacity-0 scale-95 translate-y-4"
+                x-transition:enter-end="opacity-100 scale-100 translate-y-0">
+                
+                <h2 class="text-xl font-bold mb-6 text-blue-400">Add New Type</h2>
+                
+                <div class="space-y-5" x-data="{ name: '', desc: '', loading: false }">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-2">Type Name</label>
+                        <input type="text" x-model="name" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 transition">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-2">Description</label>
+                        <textarea x-model="desc" rows="3" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 transition"></textarea>
+                    </div>
+                    
+                    <div class="flex justify-end gap-3 mt-8">
+                        <button type="button" @click="openTypeModal = false" class="px-6 py-2.5 text-sm font-medium text-gray-400 hover:text-white transition">Cancel</button>
+                        <button type="button" 
+                            @click="
+                                if(!name) return;
+                                loading = true;
+                                fetch('{{ route('types.store') }}', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
+                                    body: JSON.stringify({ name: name, description: desc })
+                                })
+                                .then(res => res.json())
+                                .then(data => {
+                                    if(data.success) {
+                                        document.querySelectorAll('select[name=\'type_id\']').forEach(s => s.add(new Option(data.data.name, data.data.id, true, true)));
+                                        form.type_id = data.data.id;
+                                        openTypeModal = false;
+                                    } else { alert(data.message); }
+                                })
+                                .finally(() => loading = false)
+                            "
+                            :disabled="loading"
+                            class="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition disabled:opacity-50">
+                            <span x-show="!loading">Create</span>
+                            <span x-show="loading">...</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <script>
         function promptModal() {
             return {
                 open: false, isEdit: false, editId: null, previewUrl: '',
+                openCatModal: false, openTypeModal: false,
                 form: { category_id: '', type_id: '', prompt: '', description: '', currentImage: '', currentCompressedImage: '' },
 
+                initFromUrl() { @if($errors->any()) this.openCreate(); @endif },
                 openCreate() {
                     this.isEdit = false; this.editId = null; this.previewUrl = '';
                     this.form = { category_id: '', type_id: '', prompt: '', description: '', currentImage: '', currentCompressedImage: '' };
                     this.open = true; document.body.style.overflow = 'hidden';
                 },
-                openEdit(id, category_id, type_id, prompt, description, currentImage, currentCompressedImage) {
+                openEdit(id, cat_id, type_id, prompt, desc, img, cimg) {
                     this.isEdit = true; this.editId = id; this.previewUrl = '';
-                    this.form = { category_id, type_id, prompt, description, currentImage, currentCompressedImage };
+                    this.form = { category_id: cat_id, type_id: type_id, prompt, description: desc, currentImage: img, currentCompressedImage: cimg };
                     this.open = true; document.body.style.overflow = 'hidden';
                 },
-                closeModal() { this.open = false; this.previewUrl = ''; document.body.style.overflow = ''; },
-                onImageChange(e) { const f = e.target.files[0]; if (f) this.previewUrl = URL.createObjectURL(f); },
-                initFromUrl() { @if($errors->any()) this.openCreate(); @endif }
+                closeModal() { 
+                    if (this.openCatModal || this.openTypeModal) return;
+                    this.open = false; this.previewUrl = ''; document.body.style.overflow = ''; 
+                },
+                onImageChange(e) { const f = e.target.files[0]; if (f) this.previewUrl = URL.createObjectURL(f); }
             }
         }
     </script>

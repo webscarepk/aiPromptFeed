@@ -43,7 +43,16 @@ class TypeController extends Controller
             $data['image'] = $paths['original'];
             $data['compressed_image'] = $paths['compressed'];
         }
-        Type::create($data);
+        $type = Type::create($data);
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Type created successfully.',
+                'data' => $type
+            ]);
+        }
+
         return redirect()->route('types.index')->with('success', 'Type created successfully.');
     }
 

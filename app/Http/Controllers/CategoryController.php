@@ -43,7 +43,16 @@ class CategoryController extends Controller
             $data['image'] = $paths['original'];
             $data['compressed_image'] = $paths['compressed'];
         }
-        Category::create($data);
+        $category = Category::create($data);
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Category created successfully.',
+                'data' => $category
+            ]);
+        }
+
         return redirect()->route('categories.index')->with('success', 'Category created successfully.');
     }
 

@@ -41,7 +41,12 @@ class AiPromptController extends Controller
         return view('ai_prompts.index', compact('aiPrompts', 'categories', 'types'));
     }
 
-    public function create() { return redirect()->route('ai-prompts.index'); }
+    public function create()
+    {
+        $categories = Category::all();
+        $types = Type::all();
+        return view('ai_prompts.create', compact('categories', 'types'));
+    }
 
     public function store(Request $request)
     {
@@ -66,7 +71,12 @@ class AiPromptController extends Controller
         return redirect()->route('ai-prompts.index')->with('success', 'AI Prompt created successfully.');
     }
 
-    public function edit(AiPrompt $aiPrompt) { return redirect()->route('ai-prompts.index'); }
+    public function edit(AiPrompt $aiPrompt)
+    {
+        $categories = Category::all();
+        $types = Type::all();
+        return view('ai_prompts.edit', compact('aiPrompt', 'categories', 'types'));
+    }
 
     public function update(Request $request, AiPrompt $aiPrompt)
     {
