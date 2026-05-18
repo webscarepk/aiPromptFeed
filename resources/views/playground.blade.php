@@ -186,45 +186,27 @@
                         </form>
                     </div>
 
-                    {{-- Phone Verification Simulation --}}
+                    {{-- Firebase Phone Verification Simulation --}}
                     <div class="card p-6 flex flex-col justify-between">
                         <div>
                             <h3 class="text-base font-bold text-white mb-4 flex items-center gap-2">
                                 <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M3 5a2 2 0 012-2h3.28a1 1 0 01.94.725l.548 2.2a1 1 0 01-.321.988l-1.305.98a10.582 10.582 0 004.872 4.872l.98-1.305a1 1 0 01.988-.321l2.2.548a1 1 0 01.725.94V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                        d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
                                 </svg>
-                                Phone Verification System
+                                Firebase Phone Verification
                             </h3>
-                            <p class="text-xs text-gray-500 mb-4">Request a 6-digit OTP code to be sent to your phone (via Twilio if set, or via mock console logs in development mode) and submit the code to verify.</p>
+                            <p class="text-xs text-gray-500 mb-4">
+                                In production, the Mobile Client (iOS/Android) uses Firebase SDK to verify phone numbers via SMS. Once verified, Firebase returns a secure ID Token (JWT). The client sends this token to the backend at <code class="text-emerald-400 bg-emerald-500/10 px-1 py-0.5 rounded text-[10px]">POST /api/v1/auth/phone/verify</code> as <code class="text-emerald-400 bg-emerald-500/10 px-1 py-0.5 rounded text-[10px]">token</code>.
+                            </p>
 
                             <div class="space-y-4">
                                 <div>
-                                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Phone Number</label>
-                                    <div class="flex gap-2">
-                                        <input type="text" x-model="phoneForm.phone" placeholder="+923001234567" :disabled="otpSent"
-                                            class="flex-grow bg-gray-900 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition disabled:opacity-50">
-                                        <button @click="sendVerificationCode()" :disabled="!token || !phoneForm.phone || otpSent"
-                                            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold text-white rounded-xl transition duration-300">
-                                            Send Code
-                                        </button>
-                                    </div>
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Phone Number or Firebase ID Token</label>
+                                    <input type="text" x-model="firebaseForm.token" placeholder="+923001234567 or Firebase JWT Token"
+                                        class="w-full bg-gray-900 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition">
+                                    <span class="text-[10px] text-gray-600 mt-1.5 block">💡 In local mode, you can pass a real phone number directly to verify instantly!</span>
                                 </div>
-
-                                <template x-if="otpSent">
-                                    <div class="space-y-2">
-                                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">6-Digit Verification Code</label>
-                                        <input type="text" x-model="phoneForm.code" placeholder="Enter OTP code"
-                                            class="w-full bg-gray-900 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition">
-                                        
-                                        <template x-if="mockOtpCode">
-                                            <div class="p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-400 flex items-center justify-between">
-                                                <span>💡 Mock Code: <strong x-text="mockOtpCode" class="text-white text-xs select-all"></strong> (Auto-filled!)</span>
-                                                <button @click="otpSent = false; mockOtpCode = ''; phoneForm.code = ''" class="text-[10px] text-gray-500 hover:text-red-400">Reset</button>
-                                            </div>
-                                        </template>
-                                    </div>
-                                </template>
 
                                 <div class="p-3 rounded-xl bg-white/[0.01] border border-white/5 flex items-center gap-3">
                                     <template x-if="user.phone_verified_at">
@@ -246,9 +228,9 @@
                             </div>
                         </div>
 
-                        <button @click="verifyPhone()" :disabled="!token || !otpSent || !phoneForm.code"
+                        <button @click="verifyPhoneFirebase()" :disabled="!token || !firebaseForm.token"
                             class="w-full py-2.5 mt-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-bold text-white rounded-xl transition duration-300">
-                            Submit OTP & Verify
+                            Verify via Firebase (Simulate)
                         </button>
                     </div>
                 </div>
@@ -388,9 +370,7 @@
                 history: [],
                 consoleLogs: [],
                 profileForm: { name: '', full_name: '', avatar_url: '' },
-                phoneForm: { phone: '', code: '' },
-                otpSent: false,
-                mockOtpCode: '',
+                firebaseForm: { token: '' },
 
                 initPlayground() {
                     if (this.token) {
@@ -576,44 +556,9 @@
                     }
                 },
 
-                async sendVerificationCode() {
-                    if (!this.token || !this.phoneForm.phone) return;
-                    this.logConsole('request', 'POST /api/v1/auth/phone/send-otp -> generating and sending OTP code', { phone: this.phoneForm.phone });
-
-                    try {
-                        const response = await fetch('/api/v1/auth/phone/send-otp', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Accept': 'application/json',
-                                'Authorization': `Bearer ${this.token}`,
-                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                            },
-                            body: JSON.stringify({ phone: this.phoneForm.phone })
-                        });
-
-                        const data = await response.json();
-                        this.logConsole('response', `Status ${response.status} ${response.statusText}`, data);
-
-                        if (response.ok && data.success) {
-                            this.otpSent = true;
-                            if (data.otp_code) {
-                                this.mockOtpCode = data.otp_code;
-                                this.phoneForm.code = String(data.otp_code); // auto-fill for frictionless mock testing
-                                this.logConsole('info', `Mock verification code loaded: ${data.otp_code}`);
-                            }
-                            alert(data.message || 'OTP verification code sent!');
-                        } else {
-                            alert(data.message || 'Failed to send OTP verification code.');
-                        }
-                    } catch (error) {
-                        this.logConsole('error', `Failed to send verification code: ${error.message}`);
-                    }
-                },
-
-                async verifyPhone() {
-                    if (!this.token) return;
-                    this.logConsole('request', 'POST /api/v1/auth/phone/verify -> saving phone verification state', this.phoneForm);
+                async verifyPhoneFirebase() {
+                    if (!this.token || !this.firebaseForm.token) return;
+                    this.logConsole('request', 'POST /api/v1/auth/phone/verify -> verifying Firebase Phone Auth Token', this.firebaseForm);
 
                     try {
                         const response = await fetch('/api/v1/auth/phone/verify', {
@@ -621,22 +566,21 @@
                             headers: {
                                 'Content-Type': 'application/json',
                                 'Accept': 'application/json',
-                                'Authorization': `Bearer ${this.token}`
+                                'Authorization': `Bearer ${this.token}`,
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                             },
-                            body: JSON.stringify(this.phoneForm)
+                            body: JSON.stringify({ token: this.firebaseForm.token })
                         });
 
                         const data = await response.json();
                         this.logConsole('response', `Status ${response.status} ${response.statusText}`, data);
 
-                        if (response.ok) {
+                        if (response.ok && data.success) {
                             this.fetchUserData();
-                            alert('Phone number verified successfully!');
-                            this.otpSent = false;
-                            this.mockOtpCode = '';
-                            this.phoneForm.code = '';
+                            alert(data.message || 'Phone number verified via Firebase successfully!');
+                            this.firebaseForm.token = '';
                         } else {
-                            alert(data.message || 'Verification failed.');
+                            alert(data.message || 'Firebase verification failed.');
                         }
                     } catch (error) {
                         this.logConsole('error', `Failed to verify phone: ${error.message}`);

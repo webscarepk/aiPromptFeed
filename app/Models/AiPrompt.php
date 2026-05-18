@@ -26,5 +26,9 @@ class AiPrompt extends Model
         return $this->belongsTo(Type::class);
     }
 
+    public function favoritedBy()
+    {
+        return $this->belongsToMany(User::class, 'favorite_prompts')->withTimestamps();
+    }
 
 }

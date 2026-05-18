@@ -53,6 +53,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(GenerationJob::class);
     }
 
+    public function favoritePrompts()
+    {
+        return $this->belongsToMany(AiPrompt::class, 'favorite_prompts')->withTimestamps();
+    }
+
     /**
      * The attributes that should be hidden for serialization.
      *

@@ -71,4 +71,8 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::post('/generations', [GenerationApiController::class, 'store']);
     Route::get('/generations', [GenerationApiController::class, 'index']);
     Route::get('/generations/{job}', [GenerationApiController::class, 'show']);
+    Route::get('/generations/history', [GenerationApiController::class, 'index']); // Explicit history route
+
+    Route::get('/me/favorites', [\App\Http\Controllers\Api\FavoriteApiController::class, 'index']);
+    Route::post('/ai-prompts/{aiPrompt}/favorite', [\App\Http\Controllers\Api\FavoriteApiController::class, 'toggle']);
 });
