@@ -16,6 +16,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         return view('dashboard');
     })->name('dashboard');
 
+    Route::get('/playground', [App\Http\Controllers\PlaygroundController::class, 'index'])->name('playground');
+
     Route::resource('categories', CategoryController::class);
     Route::resource('types', TypeController::class);
     Route::resource('ai-models', AiModelController::class);

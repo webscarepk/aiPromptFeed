@@ -26,7 +26,11 @@ class User extends Authenticatable implements MustVerifyEmail
         'full_name',
         'avatar_url',
         'subscription_id',
-        'email_verified_at'
+        'email_verified_at',
+        'phone',
+        'phone_verified_at',
+        'streak_count',
+        'last_claimed_at',
     ];
 
     public function subscriptionPlan()
@@ -37,6 +41,11 @@ class User extends Authenticatable implements MustVerifyEmail
     public function creditBalances()
     {
         return $this->hasMany(UserCreditBalance::class);
+    }
+
+    public function creditHistories()
+    {
+        return $this->hasMany(CreditHistory::class);
     }
 
     public function generationJobs()
@@ -63,6 +72,8 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return [
             'email_verified_at' => 'datetime',
+            'phone_verified_at' => 'datetime',
+            'last_claimed_at' => 'datetime',
             'password' => 'hashed',
         ];
     }

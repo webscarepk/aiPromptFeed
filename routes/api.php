@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\WebhookController;
 Route::prefix('v1')->group(function () {
     Route::post('/auth/register', [AuthController::class, 'register']);
     Route::post('/auth/login', [AuthController::class, 'login']);
+    Route::post('/auth/google', [AuthController::class, 'googleLogin']);
     Route::get('/auth/email/verify/{id}/{hash}', [AuthController::class, 'verifyEmail'])->name('verification.verify');
     Route::get('/auth/email/verify-temp/{id}/{token}', [AuthController::class, 'verifyTempEmail'])->name('auth.verify-temp');
     Route::post('/auth/email/resend', [AuthController::class, 'resendVerificationEmail']);
@@ -39,6 +40,7 @@ Route::prefix('v1')->group(function () {
     Route::get('/ai-models/{aiModel}', [AiModelApiController::class, 'show']);
     Route::get('/ai-prompts', [AiPromptApiController::class, 'index']);
     Route::get('/ai-prompts/{aiPrompt}', [AiPromptApiController::class, 'show']);
+    Route::get('/ai-prompts/{aiPrompt}/similar', [AiPromptApiController::class, 'similar']);
 
     Route::get('/plans', [SubscriptionApiController::class, 'index']);
 
@@ -53,6 +55,13 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::post('/auth/refresh', [AuthController::class, 'refresh']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/me', [AuthController::class, 'me']);
+    Route::post('/auth/phone/send-otp', [AuthController::class, 'sendOtp']);
+    Route::post('/auth/phone/verify', [AuthController::class, 'verifyPhone']);
+
+    Route::get('/me', [AuthController::class, 'me']);
+    Route::put('/me/profile', [AuthController::class, 'updateProfile']);
+    Route::get('/me/credits/history', [AuthController::class, 'creditHistory']);
+    Route::post('/me/credits/claim', [AuthController::class, 'claimCredits']);
 
     Route::get('/me/subscription', [SubscriptionApiController::class, 'mySubscription']);
     Route::post('/me/subscription', [SubscriptionApiController::class, 'subscribe']);
