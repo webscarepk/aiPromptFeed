@@ -41,11 +41,14 @@ class AuthController extends Controller
             'expires_at' => $expiresAt,
         ]);
 
-        // Generate signed verification URL
+        // Get frontend URL from config or request
+        $frontendUrl = config('app.frontend_url', 'http://localhost:3000');
+
+        // Generate signed verification URL with redirect parameter
         $signedUrl = URL::temporarySignedRoute(
             'auth.verify-temp',
             $expiresAt,
-            ['id' => $tempUser->id, 'token' => $verificationToken]
+            ['id' => $tempUser->id, 'token' => $verificationToken, 'redirect_to' => rtrim($frontendUrl, '/')]
         );
 
         // Send verification email
@@ -132,12 +135,38 @@ class AuthController extends Controller
         $temp->delete();
 
         $accessToken = $user->createToken('auth_token')->plainTextToken;
-        return response()->json([
-            'message' => 'Email verified and account created.',
-            'access_token' => $accessToken,
-            'token_type' => 'Bearer',
-            'user' => $user,
-        ], 200);
+
+        // Check if requesting JSON response or HTML redirect
+        if ($request->wantsJson() || $request->query('format') === 'json') {
+            return response()->json([
+                'message' => 'Email verified and account created.',
+                'access_token' => $accessToken,
+                'token_type' => 'Bearer',
+                'user' => $user,
+            ], 200);
+        }
+
+        // Get app redirect URL from query param or config
+        $redirectUrl = $request->query('redirect_to', config('app.frontend_url', 'http://localhost:3000'));
+        $redirectUrl = rtrim($redirectUrl, '/');
+
+        // Determine redirect destination - could be login with token or dashboard
+        $redirectUrl .= '/auth/verify?token=' . urlencode($accessToken);
+
+        // Return HTML that redirects to app with token
+        return response('<html><body style="font-family:sans-serif;text-align:center;padding:50px;">
+            <h2>Email Verified Successfully!</h2>
+            <p>Redirecting you to the app...</p>
+            <script>
+                // Store token in localStorage for the app to access
+                localStorage.setItem("auth_token", "' . $accessToken . '");
+                localStorage.setItem("user", JSON.stringify(' . json_encode($user) . '));
+                // Redirect to app
+                window.location.href = "' . $redirectUrl . '";
+            </script>
+            <p>If you are not redirected, <a href="' . $redirectUrl . '">click here</a></p>
+        </body></html>', 200)
+            ->header('Content-Type', 'text/html');
     }
 
     public function resendVerificationEmail(Request $request)
