@@ -54,7 +54,7 @@ class AiPromptController extends Controller
             'category_id' => 'required|exists:categories,id',
             'type_id'     => 'required|exists:types,id',
             'prompt'      => 'required|string',
-            'image'       => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+            'image'       => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:200048',
             'description' => 'nullable|string',
         ]);
 
@@ -84,7 +84,7 @@ class AiPromptController extends Controller
             'category_id' => 'required|exists:categories,id',
             'type_id'     => 'required|exists:types,id',
             'prompt'      => 'required|string',
-            'image'       => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+            'image'       => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:200048',
             'description' => 'nullable|string',
         ]);
 

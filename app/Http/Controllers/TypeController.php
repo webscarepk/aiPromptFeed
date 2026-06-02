@@ -34,7 +34,7 @@ class TypeController extends Controller
         $request->validate([
             'name' => 'required|string|max:255|unique:types,name',
             'description' => 'nullable|string',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048'
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:200048'
         ]);
 
         $data = ['name' => $request->name, 'slug' => Str::slug($request->name), 'description' => $request->description];
@@ -63,7 +63,7 @@ class TypeController extends Controller
         $request->validate([
             'name' => 'required|string|max:255|unique:types,name,' . $type->id,
             'description' => 'nullable|string',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048'
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:200048'
         ]);
 
         $data = ['name' => $request->name, 'slug' => Str::slug($request->name), 'description' => $request->description];
