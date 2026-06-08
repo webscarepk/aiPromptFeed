@@ -109,7 +109,7 @@
                         <span class="text-xs text-gray-600">{{ $prompt->created_at->diffForHumans() }}</span>
                         <div class="flex items-center gap-2">
                             <button
-                                @click="openEdit({{ $prompt->id }}, {{ $prompt->category_id }}, {{ $prompt->type_id }}, {{ json_encode($prompt->prompt) }}, {{ json_encode($prompt->description ?? '') }}, {{ json_encode($prompt->image ? asset('storage/' . $prompt->image) : '') }}, {{ json_encode($prompt->compressed_image ? asset('storage/' . $prompt->compressed_image) : '') }})"
+                                @click="openEdit({{ $prompt->id }}, {{ $prompt->category_id }}, {{ $prompt->type_id }}, {{ json_encode($prompt->prompt) }}, {{ json_encode($prompt->description ?? '') }}, {{ json_encode($prompt->image ? asset('storage/' . $prompt->image) : '') }}, {{ json_encode($prompt->compressed_image ? asset('storage/' . $prompt->compressed_image) : '') }}, {{ json_encode($prompt->images_data ?? []) }})"
                                 title="Edit"
                                 class="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition duration-200">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -277,45 +277,60 @@
                     </div>
 
                     <div>
-                        <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Preview Image
-                            <span class="text-gray-600 font-normal normal-case">(optional)</span></label>
-                        <div class="flex items-center gap-4">
-                            <div x-show="previewUrl || (isEdit && form.currentImage)"
-                                class="flex gap-2">
+                        <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Preview Images
+                            <span class="text-gray-600 font-normal normal-case">(optional · up to 5)</span></label>
+
+                        {{-- Preview grid for selected images --}}
+                        <div x-show="previews.length > 0 || (isEdit && form.currentImage)" class="flex flex-wrap gap-2 mb-3">
+
+                            {{-- Current stored image (edit mode, before new upload) --}}
+                            <template x-if="isEdit && form.currentImage && previews.length === 0">
                                 <div class="relative group">
-                                    <div class="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0"
-                                        style="border: 1px solid rgba(255,255,255,0.1);">
-                                        <img :src="previewUrl || form.currentImage" class="w-full h-full object-cover">
+                                    <div class="w-20 h-20 rounded-xl overflow-hidden" style="border: 1px solid rgba(255,255,255,0.1);">
+                                        <img :src="form.currentImage" class="w-full h-full object-cover">
                                     </div>
-                                    <span x-show="!previewUrl && form.currentImage" class="absolute -top-1 -right-1 bg-blue-500 text-[8px] text-white px-1 rounded-full">ORG</span>
+                                    <span class="absolute -top-1 -right-1 bg-blue-500 text-[8px] text-white px-1.5 py-0.5 rounded-full">ORG</span>
                                 </div>
-                                <div x-show="!previewUrl && form.currentCompressedImage" class="relative group">
-                                    <div class="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0"
-                                        style="border: 1px solid rgba(255,255,255,0.1);">
-                                        <img :src="form.currentCompressedImage" class="w-full h-full object-cover">
+                            </template>
+
+                            {{-- New image previews with remove button --}}
+                            <template x-for="(url, i) in previews" :key="i">
+                                <div class="relative group">
+                                    <div class="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0" style="border: 1px solid rgba(255,255,255,0.12);">
+                                        <img :src="url" class="w-full h-full object-cover">
                                     </div>
-                                    <span class="absolute -top-1 -right-1 bg-green-500 text-[8px] text-white px-1 rounded-full">CMP</span>
+                                    <button type="button" @click="removePreview(i)"
+                                        class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 hover:bg-red-400 text-white flex items-center justify-center text-xs font-bold opacity-0 group-hover:opacity-100 transition shadow-lg">
+                                        ✕
+                                    </button>
+                                    <span class="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[8px] bg-black/70 text-gray-300 px-1.5 rounded-full" x-text="i+1"></span>
                                 </div>
-                            </div>
-                            <label class="flex-grow flex items-center gap-3 px-4 py-4 rounded-xl cursor-pointer transition"
-                                style="background: rgba(255,255,255,0.03); border: 2px dashed rgba(255,255,255,0.1);"
-                                onmouseover="this.style.borderColor='rgba(59,130,246,0.5)'"
-                                onmouseout="this.style.borderColor='rgba(255,255,255,0.1)'">
-                                <svg class="w-5 h-5 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor"
-                                    viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                </svg>
-                                <div>
-                                    <p class="text-sm font-medium text-blue-400"
-                                        x-text="(previewUrl || (isEdit && form.currentImage)) ? 'Change image' : 'Upload image'">
-                                    </p>
-                                    <p class="text-xs text-gray-600">PNG, JPG, GIF up to 2MB</p>
-                                </div>
-                                <input type="file" name="image" class="hidden" accept="image/*"
-                                    @change="onImageChange($event)">
-                            </label>
+                            </template>
                         </div>
+
+                        {{-- Upload area --}}
+                        <label class="flex items-center gap-3 px-4 py-4 rounded-xl cursor-pointer transition w-full"
+                            style="background: rgba(255,255,255,0.03); border: 2px dashed rgba(255,255,255,0.1);"
+                            onmouseover="this.style.borderColor='rgba(59,130,246,0.5)'"
+                            onmouseout="this.style.borderColor='rgba(255,255,255,0.1)'"
+                            :class="{ 'opacity-50 pointer-events-none': previews.length >= 5 }">
+                            <svg class="w-5 h-5 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <div class="flex-grow">
+                                <p class="text-sm font-medium text-blue-400"
+                                    x-text="previews.length > 0 ? 'Add more images (' + previews.length + '/5 selected)' : 'Select up to 5 images'"></p>
+                                <p class="text-xs text-gray-600">PNG, JPG, GIF up to 2MB each</p>
+                            </div>
+                            <span x-show="previews.length > 0"
+                                class="text-xs font-bold px-2 py-1 rounded-lg"
+                                :style="previews.length >= 5 ? 'background:rgba(239,68,68,0.15);color:#f87171' : 'background:rgba(59,130,246,0.15);color:#60a5fa'"
+                                x-text="previews.length + '/5'"></span>
+                            <input type="file" name="images[]" id="promptImages" class="hidden"
+                                accept="image/*" multiple
+                                @change="onImagesChange($event)">
+                        </label>
                     </div>
 
                     <div class="flex items-center justify-end gap-3 pt-2"
@@ -456,34 +471,83 @@
                         </button>
                     </div>
                 </div>
-            </div>
         </div>
 
-    </div>
+    </div>{{-- end x-data outer div --}}
 
     <script>
         function promptModal() {
             return {
-                open: false, isEdit: false, editId: null, previewUrl: '',
+                open: false, isEdit: false, editId: null,
                 openCatModal: false, openTypeModal: false,
+                previews: [],   // array of object URLs for new images
+                imageFiles: [], // actual File objects
                 form: { category_id: '', type_id: '', prompt: '', description: '', currentImage: '', currentCompressedImage: '' },
 
                 initFromUrl() { @if($errors->any()) this.openCreate(); @endif },
+
                 openCreate() {
-                    this.isEdit = false; this.editId = null; this.previewUrl = '';
+                    this.isEdit = false; this.editId = null;
+                    this.previews = []; this.imageFiles = [];
                     this.form = { category_id: '', type_id: '', prompt: '', description: '', currentImage: '', currentCompressedImage: '' };
                     this.open = true; document.body.style.overflow = 'hidden';
                 },
-                openEdit(id, cat_id, type_id, prompt, desc, img, cimg) {
-                    this.isEdit = true; this.editId = id; this.previewUrl = '';
+
+                openEdit(id, cat_id, type_id, prompt, desc, img, cimg, imagesData = []) {
+                    this.isEdit = true; this.editId = id;
+                    this.previews = []; this.imageFiles = [];
                     this.form = { category_id: cat_id, type_id: type_id, prompt, description: desc, currentImage: img, currentCompressedImage: cimg };
+                    
+                    if (imagesData && Array.isArray(imagesData) && imagesData.length > 0) {
+                        this.previews = imagesData.map(data => '/storage/' + (data.original || ''));
+                    } else if (img) {
+                        this.previews = [img];
+                    }
+                    
                     this.open = true; document.body.style.overflow = 'hidden';
                 },
-                closeModal() { 
+
+                closeModal() {
                     if (this.openCatModal || this.openTypeModal) return;
-                    this.open = false; this.previewUrl = ''; document.body.style.overflow = ''; 
+                    this.open = false;
+                    this.previews.forEach(u => URL.revokeObjectURL(u));
+                    this.previews = []; this.imageFiles = [];
+                    document.body.style.overflow = '';
                 },
-                onImageChange(e) { const f = e.target.files[0]; if (f) this.previewUrl = URL.createObjectURL(f); }
+
+                onImagesChange(e) {
+                    const incoming = Array.from(e.target.files);
+                    const remaining = 5 - this.imageFiles.length;
+                    const toAdd = incoming.slice(0, remaining);
+
+                    toAdd.forEach(f => {
+                        this.imageFiles.push(f);
+                        this.previews.push(URL.createObjectURL(f));
+                    });
+
+                    // ⚠️ CRITICAL: Rebuild the input FileList with ALL accumulated files
+                    // so the form submission actually sends them.
+                    // Without this, e.target.value='' would wipe the input.
+                    const dt = new DataTransfer();
+                    this.imageFiles.forEach(f => dt.items.add(f));
+                    e.target.files = dt.files;
+
+                    if (incoming.length > remaining) {
+                        alert(`Only ${remaining} more image(s) can be added (max 5 total).`);
+                    }
+                },
+
+                removePreview(index) {
+                    URL.revokeObjectURL(this.previews[index]);
+                    this.previews.splice(index, 1);
+                    this.imageFiles.splice(index, 1);
+
+                    // Rebuild the file input's FileList via DataTransfer
+                    const dt = new DataTransfer();
+                    this.imageFiles.forEach(f => dt.items.add(f));
+                    const input = document.getElementById('promptImages');
+                    if (input) input.files = dt.files;
+                }
             }
         }
     </script>

@@ -32,8 +32,14 @@ class AiPromptApiController extends Controller
                     'id' => $prompt->id,
                     'prompt' => $prompt->prompt,
                     'description' => $prompt->description,
-                    'image' => $prompt->image ? asset('storage/' . $prompt->image) : null,
-                    'compressed_image' => $prompt->compressed_image ? asset('storage/' . $prompt->compressed_image) : null,
+                    // 'image' => $prompt->image ? asset('storage/' . $prompt->image) : null,
+                    // 'compressed_image' => $prompt->compressed_image ? asset('storage/' . $prompt->compressed_image) : null,
+                    'images_data' => is_array($prompt->images_data) ? array_map(function ($img) {
+                        return [
+                            'original' => isset($img['original']) ? asset('storage/' . $img['original']) : null,
+                            'compressed' => isset($img['compressed']) ? asset('storage/' . $img['compressed']) : null,
+                        ];
+                    }, $prompt->images_data) : [],
                     'slug' => $prompt->slug,
                     'category' => $prompt->category ? [
                         'id' => $prompt->category->id,
@@ -71,6 +77,12 @@ class AiPromptApiController extends Controller
                     'description' => $prompt->description,
                     'image' => $prompt->image ? asset('storage/' . $prompt->image) : null,
                     'compressed_image' => $prompt->compressed_image ? asset('storage/' . $prompt->compressed_image) : null,
+                    'images_data' => is_array($prompt->images_data) ? array_map(function ($img) {
+                        return [
+                            'original' => isset($img['original']) ? asset('storage/' . $img['original']) : null,
+                            'compressed' => isset($img['compressed']) ? asset('storage/' . $img['compressed']) : null,
+                        ];
+                    }, $prompt->images_data) : [],
                     'slug' => $prompt->slug,
                     'category' => $prompt->category ? [
                         'id' => $prompt->category->id,
@@ -120,6 +132,12 @@ class AiPromptApiController extends Controller
                     'description' => $p->description,
                     'image' => $p->image ? asset('storage/' . $p->image) : null,
                     'compressed_image' => $p->compressed_image ? asset('storage/' . $p->compressed_image) : null,
+                    'images_data' => is_array($p->images_data) ? array_map(function ($img) {
+                        return [
+                            'original' => isset($img['original']) ? asset('storage/' . $img['original']) : null,
+                            'compressed' => isset($img['compressed']) ? asset('storage/' . $img['compressed']) : null,
+                        ];
+                    }, $p->images_data) : [],
                     'slug' => $p->slug,
                     'category' => $p->category ? [
                         'id' => $p->category->id,

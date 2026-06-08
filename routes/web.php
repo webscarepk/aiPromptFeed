@@ -17,6 +17,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('dashboard');
 
     Route::get('/playground', [App\Http\Controllers\PlaygroundController::class, 'index'])->name('playground');
+    Route::get('/credits/history', [App\Http\Controllers\CreditHistoryController::class, 'index'])->name('credits.history');
 
     Route::resource('categories', CategoryController::class);
     Route::resource('types', TypeController::class);

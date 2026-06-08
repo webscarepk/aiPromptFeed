@@ -22,40 +22,37 @@ class AuthController extends Controller
 {
     public function register(Request $request)
     {
-        $request->validate([
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:8',
         ]);
 
-        // Create a temporary user record
-        $verificationToken = Str::random(40);
-        $expiresAt = Carbon::now()->addMinutes(60);
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed.',
+                'errors' => $validator->errors()
+            ], 422);
+        }
 
-        $tempUser = TemporaryUser::create([
+        // Create the user directly (bypassing email verification/temporary users as requested)
+        $user = User::create([
             'name' => $request->name,
             'full_name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
-            'verification_token' => hash('sha256', $verificationToken),
-            'expires_at' => $expiresAt,
+            // 'email_verified_at' => now(), // DO NOT auto-verify, they will verify later from the app
         ]);
 
-        // Get frontend URL from config or request
-        $frontendUrl = config('app.frontend_url', 'http://localhost:3000');
+        event(new \Illuminate\Auth\Events\Registered($user));
 
-        // Generate signed verification URL with redirect parameter
-        $signedUrl = URL::temporarySignedRoute(
-            'auth.verify-temp',
-            $expiresAt,
-            ['id' => $tempUser->id, 'token' => $verificationToken, 'redirect_to' => rtrim($frontendUrl, '/')]
-        );
-
-        // Send verification email
-        Mail::to($tempUser->email)->send(new TempUserVerificationMail($signedUrl));
+        $accessToken = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
-            'message' => 'Registration received. Please check your email to verify your account.',
+            'message' => 'Registration successful.',
+            'access_token' => $accessToken,
+            'token_type' => 'Bearer',
+            'user' => $user,
         ], 201);
     }
 
@@ -74,21 +71,14 @@ class AuthController extends Controller
             ]);
         }
 
-        // Enforce Email Verification
-        if (!$user->hasVerifiedEmail()) {
-            return response()->json([
-                'message' => 'Your email address is not verified. Please check your email for the verification link.',
-                'email_verified' => false
-            ], 403);
-        }
-
+        // We no longer block login for unverified emails ("user register without 2fa")
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
             'access_token' => $token,
             'token_type' => 'Bearer',
             'user' => $user,
-            'email_verified' => true
+            'email_verified' => $user->hasVerifiedEmail()
         ]);
     }
 
@@ -136,6 +126,9 @@ class AuthController extends Controller
 
         $accessToken = $user->createToken('auth_token')->plainTextToken;
 
+        // Grant +10 credits for Email Verification
+        $creditGranted = $this->grantBonusCredits($user, 'Verify Email', 'Verify Email bonus — +10 credits awarded.');
+
         // Check if requesting JSON response or HTML redirect
         if ($request->wantsJson() || $request->query('format') === 'json') {
             return response()->json([
@@ -143,6 +136,7 @@ class AuthController extends Controller
                 'access_token' => $accessToken,
                 'token_type' => 'Bearer',
                 'user' => $user,
+                'credit_granted' => $creditGranted,
             ], 200);
         }
 
@@ -235,15 +229,33 @@ class AuthController extends Controller
         }
         $nextRewardAmount = $rewards[$nextStreakIndex];
 
+        // Credit summary totals
+        $totalEarned = \App\Models\CreditHistory::where('user_id', $user->id)
+            ->where('amount', '>', 0)
+            ->sum('amount');
+        $totalSpent = \App\Models\CreditHistory::where('user_id', $user->id)
+            ->where('amount', '<', 0)
+            ->sum('amount');
+
+        // Today's watch-ad count
+        $todayAdCount = (int) \Illuminate\Support\Facades\Cache::get('watch_ad_count_' . $user->id . '_' . now()->toDateString(), 0);
+
         return response()->json([
-            'user' => $user,
+            'user'   => $user,
             'streak' => [
-                'streak_count' => $user->streak_count,
-                'last_claimed_at' => $user->last_claimed_at,
-                'can_claim_today' => $canClaim,
-                'next_reward_amount' => $nextRewardAmount,
+                'streak_count'               => $user->streak_count,
+                'last_claimed_at'            => $user->last_claimed_at,
+                'can_claim_today'            => $canClaim,
+                'next_reward_amount'         => $nextRewardAmount,
                 'streak_rewards_progression' => $rewards,
-            ]
+            ],
+            'credit_summary' => [
+                'total_earned'    => (int) $totalEarned,
+                'total_spent'     => (int) $totalSpent,
+                'today_ad_views'  => $todayAdCount,
+                'daily_ad_limit'  => 3,
+                'can_watch_ad'    => $todayAdCount < 3,
+            ],
         ]);
     }
 
@@ -254,38 +266,42 @@ class AuthController extends Controller
         ]);
 
         $token = $request->token;
-        $parts = explode('.', $token);
 
-        if (count($parts) !== 3) {
-            if (app()->environment('local', 'testing') || !str_starts_with($token, 'ey')) {
-                $email = $token;
-                if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                    $name = ucwords(str_replace(['.', '_'], ' ', explode('@', $email)[0]));
-                    $user = User::updateOrCreate(
-                        ['email' => $email],
-                        [
-                            'name' => $name,
-                            'full_name' => $name,
-                            'email_verified_at' => now(),
-                            'password' => Hash::make(Str::random(16)),
-                        ]
-                    );
+        // Local testing bypass
+        if (app()->environment('local', 'testing') && !str_starts_with($token, 'ey')) {
+            $email = $token;
+            if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $name = ucwords(str_replace(['.', '_'], ' ', explode('@', $email)[0]));
+                $user = User::updateOrCreate(
+                    ['email' => $email],
+                    [
+                        'name' => $name,
+                        'full_name' => $name,
+                        'email_verified_at' => now(),
+                        'password' => Hash::make(Str::random(16)),
+                    ]
+                );
 
-                    $accessToken = $user->createToken('auth_token')->plainTextToken;
-                    return response()->json([
-                        'access_token' => $accessToken,
-                        'token_type' => 'Bearer',
-                        'user' => $user,
-                    ]);
-                }
+                $creditGranted = $this->grantBonusCredits($user, 'Verify Email', 'Verify Email bonus — +10 credits awarded.');
+                $accessToken = $user->createToken('auth_token')->plainTextToken;
+                
+                return response()->json([
+                    'access_token' => $accessToken,
+                    'token_type' => 'Bearer',
+                    'user' => $user,
+                    'credit_granted' => $creditGranted,
+                    'credit_bonus' => $creditGranted ? 10 : 0,
+                ]);
             }
-            return response()->json(['message' => 'Invalid Google token format.'], 400);
+            return response()->json(['message' => 'Invalid local mock token format.'], 400);
         }
 
         try {
-            $payload = json_decode(base64_decode(str_replace(['-', '_'], ['+', '/'], $parts[1])), true);
+            $client = new \Google_Client(['client_id' => env('GOOGLE_CLIENT_ID')]);
+            $payload = $client->verifyIdToken($token);
+
             if (!$payload || !isset($payload['email'])) {
-                return response()->json(['message' => 'Invalid token payload.'], 400);
+                return response()->json(['message' => 'Invalid or expired Google token.'], 400);
             }
 
             $email = $payload['email'];
@@ -299,6 +315,9 @@ class AuthController extends Controller
                     $user->avatar_url = $avatarUrl;
                     $user->save();
                 }
+                if (!$user->hasVerifiedEmail()) {
+                    $user->markEmailAsVerified();
+                }
             } else {
                 $user = User::create([
                     'name' => $name,
@@ -310,11 +329,16 @@ class AuthController extends Controller
                 ]);
             }
 
+            // Grant +10 credits for Email Verification
+            $creditGranted = $this->grantBonusCredits($user, 'Verify Email', 'Verify Email bonus — +10 credits awarded.');
+
             $accessToken = $user->createToken('auth_token')->plainTextToken;
             return response()->json([
                 'access_token' => $accessToken,
                 'token_type' => 'Bearer',
                 'user' => $user,
+                'credit_granted' => $creditGranted,
+                'credit_bonus' => $creditGranted ? 10 : 0,
             ]);
         } catch (\Exception $e) {
             return response()->json(['message' => 'Authentication failed: ' . $e->getMessage()], 401);
@@ -521,43 +545,119 @@ class AuthController extends Controller
         $user->phone_verified_at = now();
         $user->save();
 
+        // Grant +10 credits for Phone Verification
+        $creditGranted = $this->grantBonusCredits($user, 'Verify Phone', 'Verify Phone bonus — +10 credits awarded.');
+
         return response()->json([
             'success' => true,
             'message' => 'Phone number verified via Firebase successfully.',
             'user' => $user,
+            'credit_granted' => $creditGranted,
+            'credit_bonus' => $creditGranted ? 10 : 0,
         ]);
     }
 
     public function updateProfile(Request $request)
     {
         $request->validate([
-            'name' => 'nullable|string|max:255',
-            'full_name' => 'nullable|string|max:255',
-            'phone' => 'nullable|string|max:20',
+            'name'       => 'nullable|string|max:255',
+            'full_name'  => 'nullable|string|max:255',
+            'phone'      => 'nullable|string|max:20',
             'avatar_url' => 'nullable|string|max:1000',
         ]);
 
         $user = $request->user();
 
-        if ($request->has('name')) {
-            $user->name = $request->name;
-        }
-        if ($request->has('full_name')) {
-            $user->full_name = $request->full_name;
-        }
-        if ($request->has('phone')) {
-            $user->phone = $request->phone;
-        }
-        if ($request->has('avatar_url')) {
-            $user->avatar_url = $request->avatar_url;
-        }
+        // Check BEFORE save if profile was already complete
+        $wasComplete = !empty($user->full_name) && !empty($user->avatar_url);
+
+        if ($request->has('name'))       $user->name       = $request->name;
+        if ($request->has('full_name'))  $user->full_name  = $request->full_name;
+        if ($request->has('phone'))      $user->phone      = $request->phone;
+        if ($request->has('avatar_url')) $user->avatar_url = $request->avatar_url;
 
         $user->save();
 
+        $creditGranted = false;
+
+        // Grant +10 credits when profile is completed for the FIRST time
+        $isNowComplete = !empty($user->full_name) && !empty($user->avatar_url);
+        
+        if (!$wasComplete && $isNowComplete) {
+            $creditGranted = $this->grantBonusCredits($user, 'Complete Profile', 'Complete Profile bonus — +10 credits awarded.');
+        }
+
         return response()->json([
-            'message' => 'Profile updated successfully.',
-            'user' => $user,
+            'message'        => 'Profile updated successfully.',
+            'user'           => $user,
+            'credit_granted' => $creditGranted,
+            'credit_bonus'   => $creditGranted ? 10 : 0,
         ]);
+    }
+
+    /**
+     * Helper to grant 10 bonus credits across all models for specific one-time actions.
+     */
+    protected function grantBonusCredits($user, $actionKey, $description)
+    {
+        $alreadyGranted = CreditHistory::where('user_id', $user->id)
+            ->where('type', 'grant')
+            ->where('description', 'LIKE', '%' . $actionKey . '%')
+            ->exists();
+
+        if ($alreadyGranted) {
+            return false;
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $activeModels = AiModel::where('is_active', true)->get();
+            if ($activeModels->isEmpty()) {
+                $activeModels = AiModel::all();
+            }
+
+            $balanceBefore = 0;
+            $balanceAfter  = 0;
+
+            foreach ($activeModels as $model) {
+                $balance = UserCreditBalance::where('user_id', $user->id)
+                    ->where('model_id', $model->id)
+                    ->first();
+
+                if ($balance) {
+                    $balanceBefore = $balance->credits_remaining;
+                    $balance->credits_remaining += 10;
+                    $balance->credits_total     += 10;
+                    $balance->save();
+                    $balanceAfter = $balance->credits_remaining;
+                } else {
+                    UserCreditBalance::create([
+                        'user_id'           => $user->id,
+                        'model_id'          => $model->id,
+                        'credits_remaining' => 10,
+                        'credits_total'     => 10,
+                    ]);
+                    $balanceBefore = 0;
+                    $balanceAfter  = 10;
+                }
+            }
+
+            CreditHistory::create([
+                'user_id'        => $user->id,
+                'amount'         => 10,
+                'type'           => 'grant',
+                'description'    => $description,
+                'balance_before' => $balanceBefore,
+                'balance_after'  => $balanceAfter,
+            ]);
+
+            DB::commit();
+            return true;
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return false;
+        }
     }
 
     public function claimCredits(Request $request)
@@ -605,7 +705,7 @@ class AuthController extends Controller
 
             $rewardAmount = $rewards[$newStreak] ?? 5;
 
-            $user->streak_count = $newStreak;
+            $user->streak_count    = $newStreak;
             $user->last_claimed_at = $now;
             $user->save();
 
@@ -614,30 +714,39 @@ class AuthController extends Controller
                 $activeModels = AiModel::all();
             }
 
+            $balanceBefore = 0;
+            $balanceAfter  = 0;
+
             foreach ($activeModels as $model) {
                 $balance = UserCreditBalance::where('user_id', $user->id)
                     ->where('model_id', $model->id)
                     ->first();
 
                 if ($balance) {
+                    $balanceBefore = $balance->credits_remaining;
                     $balance->credits_remaining += $rewardAmount;
-                    $balance->credits_total += $rewardAmount;
+                    $balance->credits_total     += $rewardAmount;
                     $balance->save();
+                    $balanceAfter = $balance->credits_remaining;
                 } else {
                     UserCreditBalance::create([
-                        'user_id' => $user->id,
-                        'model_id' => $model->id,
+                        'user_id'           => $user->id,
+                        'model_id'          => $model->id,
                         'credits_remaining' => $rewardAmount,
-                        'credits_total' => $rewardAmount,
+                        'credits_total'     => $rewardAmount,
                     ]);
+                    $balanceBefore = 0;
+                    $balanceAfter  = $rewardAmount;
                 }
             }
 
             CreditHistory::create([
-                'user_id' => $user->id,
-                'amount' => $rewardAmount,
-                'type' => 'claim',
-                'description' => "Claimed Day {$newStreak} streak reward of {$rewardAmount} credits.",
+                'user_id'        => $user->id,
+                'amount'         => $rewardAmount,
+                'type'           => 'claim',
+                'description'    => "Claimed Day {$newStreak} streak reward of {$rewardAmount} credits.",
+                'balance_before' => $balanceBefore,
+                'balance_after'  => $balanceAfter,
             ]);
 
             DB::commit();
@@ -668,14 +777,196 @@ class AuthController extends Controller
 
     public function creditHistory(Request $request)
     {
-        $history = CreditHistory::where('user_id', $request->user()->id)
-            ->latest()
-            ->paginate(15);
+        $user = $request->user();
+
+        // Total earned / spent
+        $totalEarned = CreditHistory::where('user_id', $user->id)
+            ->where('amount', '>', 0)
+            ->sum('amount');
+
+        $totalSpent = abs(CreditHistory::where('user_id', $user->id)
+            ->where('amount', '<', 0)
+            ->sum('amount'));
+
+        // Current overall balance
+        $currentBalance = UserCreditBalance::where('user_id', $user->id)
+            ->sum('credits_remaining');
+
+        // Today's ad view count
+        $todayAdCount = (int) \Illuminate\Support\Facades\Cache::get(
+            'watch_ad_count_' . $user->id . '_' . now()->toDateString(), 0
+        );
+        $query = CreditHistory::where('user_id', $user->id)->latest();
+
+        // Filter by type: earned (positive), spent (negative/deduction/refund)
+        $filter = $request->query('filter', 'all');
+        if ($filter === 'earned') {
+            $query->where('amount', '>', 0);
+        } elseif ($filter === 'spent') {
+            $query->where('amount', '<', 0);
+        }
+
+        $history = $query->paginate(20);
+
+        // "Ways to Earn" task status
+        $waysToEarn = [
+            [
+                'icon'        => 'email',
+                'title'       => 'Verify Email',
+                'reward'      => '+10',
+                'frequency'   => 'once',
+                'claimed'     => CreditHistory::where('user_id', $user->id)
+                    ->where('type', 'grant')
+                    ->where('description', 'LIKE', '%Verify Email%')
+                    ->exists(),
+                'description' => 'Verify your email address',
+            ],
+            [
+                'icon'        => 'phone',
+                'title'       => 'Verify Phone',
+                'reward'      => '+10',
+                'frequency'   => 'once',
+                'claimed'     => CreditHistory::where('user_id', $user->id)
+                    ->where('type', 'grant')
+                    ->where('description', 'LIKE', '%Verify Phone%')
+                    ->exists(),
+                'description' => 'Verify your phone number',
+            ],
+            [
+                'icon'        => 'profile',
+                'title'       => 'Complete Profile',
+                'reward'      => '+10',
+                'frequency'   => 'once',
+                'claimed'     => CreditHistory::where('user_id', $user->id)
+                    ->where('type', 'grant')
+                    ->where('description', 'LIKE', '%Complete Profile%')
+                    ->exists(),
+                'description' => 'Fill in your profile details',
+            ],
+            [
+                'icon'        => 'streak',
+                'title'       => 'Daily Streak',
+                'reward'      => '+5-150/day',
+                'frequency'   => 'daily',
+                'claimed'     => false,
+                'description' => 'Claim your daily streak reward',
+            ],
+            [
+                'icon'        => 'ad',
+                'title'       => 'Watch Ad',
+                'reward'      => '+10',
+                'frequency'   => 'daily',
+                'claimed'     => $todayAdCount >= 3,
+                'today_count' => $todayAdCount,
+                'daily_limit' => 3,
+                'can_watch'   => $todayAdCount < 3,
+                'description' => 'Watch a short ad to earn credits',
+                'admob_unit'  => env('ADMOB_REWARDED_AD_UNIT_ID', 'ca-app-pub-3174635776582237/7910987056'),
+            ],
+        ];
 
         return response()->json([
-            'success' => true,
-            'history' => $history,
+            'success'         => true,
+            'total_earned'    => (int) $totalEarned,
+            'total_spent'     => (int) $totalSpent,
+            'current_balance' => (int) $currentBalance,
+            'ways_to_earn'    => $waysToEarn,
+            'history'         => $history,
         ]);
+    }
+
+    /**
+     * Watch Ad to earn +10 credits (daily limit: 3 times per day).
+     * Called by mobile after a successful AdMob rewarded ad view.
+     * App ID: ca-app-pub-3174635776582237~9732020944
+     */
+    public function watchAd(Request $request)
+    {
+        $user = $request->user();
+        $today = now()->toDateString();
+        $cacheKey = 'watch_ad_count_' . $user->id . '_' . $today;
+        $adRewardAmount = 10; // +10 credits per ad view
+        $dailyLimit = 3;      // max 3 ads per day
+
+        // Check today's ad view count
+        $todayCount = (int) \Illuminate\Support\Facades\Cache::get($cacheKey, 0);
+
+        if ($todayCount >= $dailyLimit) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You have reached the daily limit of ' . $dailyLimit . ' ads. Come back tomorrow!',
+                'today_ad_views' => $todayCount,
+                'daily_limit'    => $dailyLimit,
+            ], 429);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            // Add credits to all active models (same as daily streak)
+            $activeModels = \App\Models\AiModel::where('is_active', true)->get();
+            if ($activeModels->isEmpty()) {
+                $activeModels = \App\Models\AiModel::all();
+            }
+
+            $balanceBefore = 0;
+            $balanceAfter  = 0;
+
+            foreach ($activeModels as $model) {
+                $balance = UserCreditBalance::where('user_id', $user->id)
+                    ->where('model_id', $model->id)
+                    ->first();
+
+                if ($balance) {
+                    $balanceBefore = $balance->credits_remaining;
+                    $balance->credits_remaining += $adRewardAmount;
+                    $balance->credits_total      += $adRewardAmount;
+                    $balance->save();
+                    $balanceAfter = $balance->credits_remaining;
+                } else {
+                    UserCreditBalance::create([
+                        'user_id'           => $user->id,
+                        'model_id'          => $model->id,
+                        'credits_remaining' => $adRewardAmount,
+                        'credits_total'     => $adRewardAmount,
+                    ]);
+                    $balanceBefore = 0;
+                    $balanceAfter  = $adRewardAmount;
+                }
+            }
+
+            // Log to credit history
+            CreditHistory::create([
+                'user_id'        => $user->id,
+                'amount'         => $adRewardAmount,
+                'type'           => 'ad_reward',
+                'description'    => 'Earned ' . $adRewardAmount . ' credits by watching an ad.',
+                'balance_before' => $balanceBefore,
+                'balance_after'  => $balanceAfter,
+            ]);
+
+            DB::commit();
+
+            // Increment daily ad counter (expires at midnight)
+            $secondsUntilMidnight = now()->endOfDay()->diffInSeconds(now());
+            \Illuminate\Support\Facades\Cache::put($cacheKey, $todayCount + 1, $secondsUntilMidnight);
+
+            return response()->json([
+                'success'        => true,
+                'message'        => "You earned +{$adRewardAmount} credits for watching an ad!",
+                'reward_amount'  => $adRewardAmount,
+                'today_ad_views' => $todayCount + 1,
+                'daily_limit'    => $dailyLimit,
+                'can_watch_ad'   => ($todayCount + 1) < $dailyLimit,
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to process ad reward: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     public function logout(Request $request)
@@ -694,6 +985,101 @@ class AuthController extends Controller
         return response()->json([
             'access_token' => $token,
             'token_type' => 'Bearer'
+        ]);
+    }
+
+    /**
+     * Called by the mobile app after the user successfully verifies their email
+     * (e.g. via Firebase or a custom OTP flow on the client side).
+     * This marks the email as verified and grants the +10 credits reward.
+     */
+    public function verifyEmailReward(Request $request)
+    {
+        $user = $request->user();
+
+        if ($user->hasVerifiedEmail()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Email is already verified.',
+            ], 400);
+        }
+
+        // Mark as verified
+        $user->markEmailAsVerified();
+
+        // Grant reward
+        $creditGranted = $this->grantBonusCredits($user, 'Verify Email', 'Email verified from mobile app — +10 credits awarded.');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Email verified successfully!',
+            'credit_granted' => $creditGranted,
+            'credit_bonus' => $creditGranted ? 10 : 0,
+            'user' => $user
+        ]);
+    }
+
+    /**
+     * Called by the mobile app after the user successfully verifies their phone number
+     * locally via Firebase or an OTP SDK.
+     * This marks the phone as verified and grants the +10 credits reward.
+     */
+    public function verifyPhoneReward(Request $request)
+    {
+        $user = $request->user();
+        
+        $request->validate([
+            'phone' => 'nullable|string'
+        ]);
+
+        if ($user->phone_verified_at) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Phone is already verified.',
+            ], 400);
+        }
+
+        if ($request->has('phone')) {
+            $user->phone = $request->phone;
+        }
+        $user->phone_verified_at = now();
+        $user->save();
+
+        // Grant reward
+        $creditGranted = $this->grantBonusCredits($user, 'Verify Phone', 'Phone verified from mobile app — +10 credits awarded.');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Phone verified successfully!',
+            'credit_granted' => $creditGranted,
+            'credit_bonus' => $creditGranted ? 10 : 0,
+            'user' => $user
+        ]);
+    }
+
+    /**
+     * Called by the mobile app when the user completes their profile.
+     */
+    public function completeProfileReward(Request $request)
+    {
+        $user = $request->user();
+
+        // Grant reward
+        $creditGranted = $this->grantBonusCredits($user, 'Complete Profile', 'Complete Profile bonus — +10 credits awarded.');
+
+        if (!$creditGranted) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Profile reward already claimed.',
+            ], 400);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Profile completed successfully!',
+            'credit_granted' => $creditGranted,
+            'credit_bonus' => 10,
+            'user' => $user
         ]);
     }
 }

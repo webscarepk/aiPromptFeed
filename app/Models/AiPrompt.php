@@ -9,11 +9,17 @@ class AiPrompt extends Model
     protected $fillable = [
         'category_id',
         'type_id',
+        'ai_model_id',
         'image',
+        'compressed_image',
+        'images_data',
         'prompt',
         'slug',
         'description',
-        'compressed_image'
+    ];
+
+    protected $casts = [
+        'images_data' => 'array',
     ];
 
     public function category()

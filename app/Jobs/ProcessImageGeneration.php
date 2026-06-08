@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\CreditHistory;
 use App\Models\GenerationJob;
 use App\Services\ModelWorkers\ModelWorkerRegistry;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -31,9 +32,7 @@ class ProcessImageGeneration implements ShouldQueue
             $this->job->status = 'processing';
             $this->job->save();
 
-            $model = $this->job->aiModel;
-            $worker = $registry->getWorker('custom');
-
+            $worker     = $registry->getWorker('custom');
             $externalId = $worker->submitJob($this->job);
 
             $this->job->external_job_id = $externalId;
@@ -41,19 +40,31 @@ class ProcessImageGeneration implements ShouldQueue
 
         } catch (\Exception $e) {
             Log::error('Generation Job Failed: ' . $e->getMessage());
-            
-            $this->job->status = 'failed';
+
+            $this->job->status        = 'failed';
             $this->job->error_message = $e->getMessage();
             $this->job->save();
 
-            // Refund credits
+            // Refund credits back to the user
             $creditBalance = $this->job->user->creditBalances()
                 ->where('model_id', $this->job->model_id)
                 ->first();
-                
+
             if ($creditBalance) {
+                $balanceBefore = $creditBalance->credits_remaining;
                 $creditBalance->credits_remaining += $this->job->credits_consumed;
                 $creditBalance->save();
+
+                // Log the refund in credit history for full traceability
+                CreditHistory::create([
+                    'user_id'           => $this->job->user_id,
+                    'amount'            => $this->job->credits_consumed,
+                    'type'              => 'refund',
+                    'description'       => "Refund for failed generation job #{$this->job->id}.",
+                    'balance_before'    => $balanceBefore,
+                    'balance_after'     => $creditBalance->credits_remaining,
+                    'generation_job_id' => $this->job->id,
+                ]);
             }
         }
     }

@@ -54,17 +54,36 @@ class AiPromptController extends Controller
             'category_id' => 'required|exists:categories,id',
             'type_id'     => 'required|exists:types,id',
             'prompt'      => 'required|string',
-            'image'       => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:200048',
+            'images'      => 'nullable|array|max:5',
+            'images.*'    => 'nullable|image',
             'description' => 'nullable|string',
         ]);
 
         $data = $request->only(['category_id', 'type_id', 'prompt', 'description']);
         $data['slug'] = Str::slug(Str::limit($request->prompt, 50)) . '-' . rand(1000, 9999);
 
-        if ($request->hasFile('image')) {
-            $paths = $this->imageService->compressAndStore($request->file('image'), 'prompts');
-            $data['image'] = $paths['original'];
-            $data['compressed_image'] = $paths['compressed'];
+        // Process ALL uploaded images and store paths
+        $imagesData = [];
+        $uploadedFiles = $request->hasFile('images')
+            ? (array) $request->file('images')
+            : ($request->hasFile('image') ? [$request->file('image')] : []);
+
+        foreach ($uploadedFiles as $file) {
+            if ($file && $file->isValid()) {
+                $paths = $this->imageService->compressAndStore($file, 'prompts');
+                $imagesData[] = [
+                    'original'   => $paths['original'],
+                    'compressed' => $paths['compressed'],
+                ];
+            }
+        }
+
+        if (!empty($imagesData)) {
+            // First image → legacy single columns (for card grid display)
+            $data['image']            = $imagesData[0]['original'];
+            $data['compressed_image'] = $imagesData[0]['compressed'];
+            // All images → JSON array column
+            $data['images_data'] = $imagesData;
         }
 
         AiPrompt::create($data);
@@ -84,7 +103,8 @@ class AiPromptController extends Controller
             'category_id' => 'required|exists:categories,id',
             'type_id'     => 'required|exists:types,id',
             'prompt'      => 'required|string',
-            'image'       => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:200048',
+            'images'      => 'nullable|array|max:5',
+            'images.*'    => 'nullable|image|max:102400',
             'description' => 'nullable|string',
         ]);
 
@@ -93,11 +113,40 @@ class AiPromptController extends Controller
         if ($request->prompt !== $aiPrompt->prompt) {
             $data['slug'] = Str::slug(Str::limit($request->prompt, 50)) . '-' . rand(1000, 9999);
         }
-        if ($request->hasFile('image')) {
+
+        // Process ALL uploaded images
+        $uploadedFiles = $request->hasFile('images')
+            ? (array) $request->file('images')
+            : ($request->hasFile('image') ? [$request->file('image')] : []);
+
+        if (!empty($uploadedFiles)) {
+            // Delete old images
             $this->imageService->deleteImages($aiPrompt->image, $aiPrompt->compressed_image);
-            $paths = $this->imageService->compressAndStore($request->file('image'), 'prompts');
-            $data['image'] = $paths['original'];
-            $data['compressed_image'] = $paths['compressed'];
+            if (!empty($aiPrompt->images_data)) {
+                foreach ($aiPrompt->images_data as $oldImg) {
+                    $this->imageService->deleteImages(
+                        $oldImg['original'] ?? null,
+                        $oldImg['compressed'] ?? null
+                    );
+                }
+            }
+
+            $imagesData = [];
+            foreach ($uploadedFiles as $file) {
+                if ($file && $file->isValid()) {
+                    $paths = $this->imageService->compressAndStore($file, 'prompts');
+                    $imagesData[] = [
+                        'original'   => $paths['original'],
+                        'compressed' => $paths['compressed'],
+                    ];
+                }
+            }
+
+            if (!empty($imagesData)) {
+                $data['image']            = $imagesData[0]['original'];
+                $data['compressed_image'] = $imagesData[0]['compressed'];
+                $data['images_data']      = $imagesData;
+            }
         }
 
         $aiPrompt->update($data);

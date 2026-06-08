@@ -11,6 +11,7 @@ class GenerationJob extends Model
         'model_id',
         'prompt',
         'source_image_url',
+        'source_images_urls',
         'result_image_url',
         'status',
         'credits_consumed',
@@ -21,6 +22,7 @@ class GenerationJob extends Model
 
     protected $casts = [
         'webhook_received_at' => 'datetime',
+        'source_images_urls'  => 'array',
     ];
 
     public function user()

@@ -60,8 +60,12 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
 
     Route::get('/me', [AuthController::class, 'me']);
     Route::put('/me/profile', [AuthController::class, 'updateProfile']);
+    Route::post('/me/verify-email-reward', [AuthController::class, 'verifyEmailReward']);
+    Route::post('/me/verify-phone-reward', [AuthController::class, 'verifyPhoneReward']);
+    Route::post('/me/complete-profile-reward', [AuthController::class, 'completeProfileReward']);
     Route::get('/me/credits/history', [AuthController::class, 'creditHistory']);
     Route::post('/me/credits/claim', [AuthController::class, 'claimCredits']);
+    Route::post('/me/credits/watch-ad', [AuthController::class, 'watchAd']);
 
     Route::get('/me/subscription', [SubscriptionApiController::class, 'mySubscription']);
     Route::post('/me/subscription', [SubscriptionApiController::class, 'subscribe']);

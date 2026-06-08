@@ -360,6 +360,7 @@
                 token: localStorage.getItem('api_access_token') || '',
                 user: {},
                 credits: [],
+                creditSummary: { total_earned: 0, total_spent: 0, can_watch_ad: true, today_ad_views: 0, daily_ad_limit: 3 },
                 streak: {
                     streak_count: 0,
                     last_claimed_at: null,
@@ -370,14 +371,22 @@
                 history: [],
                 consoleLogs: [],
                 profileForm: { name: '', full_name: '', avatar_url: '' },
+                phoneForm:   { phone: '' },
                 firebaseForm: { token: '' },
+
+                // Image generation form
+                generationForm: {
+                    prompt: '',
+                    model_id: '',
+                    images: [],
+                    previews: []
+                },
 
                 initPlayground() {
                     if (this.token) {
                         this.fetchUserData();
                         this.fetchCreditHistory();
                     } else {
-                        // Try to auto-auth via current user email
                         this.logConsole('info', 'System loaded. Ready for authentication.');
                     }
                 },
@@ -401,13 +410,27 @@
                         message: message,
                         details: details
                     });
-
-                    // Keep last 50 logs
                     if (this.consoleLogs.length > 50) this.consoleLogs.pop();
                 },
 
                 clearConsole() {
                     this.consoleLogs = [];
+                },
+
+                // ---- Image upload helpers ----
+                handleImageFiles(event) {
+                    const files = Array.from(event.target.files).slice(0, 5);
+                    this.generationForm.images = files;
+                    this.generationForm.previews = files.map(f => URL.createObjectURL(f));
+                },
+
+                removeImage(index) {
+                    this.generationForm.images.splice(index, 1);
+                    this.generationForm.previews.splice(index, 1);
+                },
+
+                promptLength() {
+                    return this.generationForm.prompt.length;
                 },
 
                 async authenticateGoogle(email) {
@@ -457,10 +480,13 @@
                         if (response.ok) {
                             this.user = data.user;
                             this.credits = data.user.credit_balances || [];
-                            this.streak = data.streak;
+                            this.streak  = data.streak;
+                            if (data.credit_summary) {
+                                this.creditSummary = data.credit_summary;
+                            }
                             this.profileForm = {
-                                name: data.user.name || '',
-                                full_name: data.user.full_name || '',
+                                name:       data.user.name || '',
+                                full_name:  data.user.full_name || '',
                                 avatar_url: data.user.avatar_url || ''
                             };
                             this.phoneForm.phone = data.user.phone || '';
@@ -487,14 +513,12 @@
                         this.logConsole('response', `Status ${response.status} ${response.statusText}`, data);
 
                         if (response.ok && data.success) {
-                            // Success Confetti Effect!
                             confetti({
                                 particleCount: 150,
                                 spread: 80,
                                 origin: { y: 0.6 },
                                 colors: ['#3b82f6', '#8b5cf6', '#10b981']
                             });
-
                             this.fetchUserData();
                             this.fetchCreditHistory();
                         } else {
@@ -549,7 +573,11 @@
 
                         if (response.ok) {
                             this.fetchUserData();
-                            alert('Profile updated successfully!');
+                            if (data.credit_granted) {
+                                alert(`✅ Profile updated! 🎉 You earned +${data.credit_bonus} credits for completing your profile!`);
+                            } else {
+                                alert('Profile updated successfully!');
+                            }
                         }
                     } catch (error) {
                         this.logConsole('error', `Failed to update profile: ${error.message}`);
